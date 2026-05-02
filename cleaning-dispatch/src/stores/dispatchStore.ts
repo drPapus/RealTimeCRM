@@ -1,6 +1,32 @@
 import { defineStore } from 'pinia'
-import { supabase } from '../lib/supabase'
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 import type { Job, Worker } from '../types'
+
+type DispatchTable = 'jobs' | 'workers'
+type DispatchRealtimeRow = Record<string, unknown>
+
+let dispatchRealtimeChannel: RealtimeChannel | null = null
+
+const sortJobs = (jobs: Job[]) =>
+  [...jobs].sort((a, b) =>
+    (a.scheduled_time ?? '').localeCompare(b.scheduled_time ?? '')
+  )
+
+const sortWorkers = (workers: Worker[]) =>
+  [...workers].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+
+const upsertById = <T extends { id: string }>(rows: T[], row: T) => {
+  const index = rows.findIndex((existingRow) => existingRow.id === row.id)
+  if (index === -1) return [...rows, row]
+
+  const nextRows = [...rows]
+  nextRows[index] = row
+  return nextRows
+}
+
+const removeById = <T extends { id: string }>(rows: T[], id: string) =>
+  rows.filter((row) => row.id !== id)
 
 export const useDispatchStore = defineStore('dispatch', {
   state: () => ({
@@ -34,6 +60,32 @@ export const useDispatchStore = defineStore('dispatch', {
       this.loading = false
     },
 
+    applyRealtimeChange(
+      table: DispatchTable,
+      payload: RealtimePostgresChangesPayload<DispatchRealtimeRow>
+    ) {
+      if (payload.eventType === 'DELETE') {
+        const deletedId = payload.old.id as string | undefined
+        if (!deletedId) {
+          void this.fetchData()
+          return
+        }
+
+        if (table === 'jobs') {
+          this.jobs = removeById(this.jobs, deletedId)
+        } else {
+          this.workers = removeById(this.workers, deletedId)
+        }
+        return
+      }
+
+      if (table === 'jobs') {
+        this.jobs = sortJobs(upsertById(this.jobs, payload.new as unknown as Job))
+      } else {
+        this.workers = sortWorkers(upsertById(this.workers, payload.new as unknown as Worker))
+      }
+    },
+
     async assignJob(jobId: string, workerId: string) {
       const job = this.jobs.find((j) => j.id === jobId)
       const worker = this.workers.find((w) => w.id === workerId)
@@ -54,6 +106,10 @@ export const useDispatchStore = defineStore('dispatch', {
           status: 'assigned',
         })
         .eq('id', jobId)
+        .select()
+
+        console.log('jobUpdate:', jobUpdate)
+        console.log('assignJob params:', { jobId, workerId })
 
       if (jobUpdate.error) {
         console.error('Job update failed:', jobUpdate.error)
@@ -112,6 +168,9 @@ export const useDispatchStore = defineStore('dispatch', {
           status: 'scheduled',
         })
         .eq('id', jobId)
+        .select()
+        
+        console.log('jobUpdate:', jobUpdate)
 
       if (jobUpdate.error) {
         console.error('Job unassign failed:', jobUpdate.error)
@@ -142,19 +201,32 @@ export const useDispatchStore = defineStore('dispatch', {
     },
 
     subscribeRealtime() {
-      supabase
+      if (dispatchRealtimeChannel) return
+
+      dispatchRealtimeChannel = supabase
         .channel('dispatch-realtime')
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'jobs' },
-          () => this.fetchData()
+          (payload) => this.applyRealtimeChange('jobs', payload)
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'workers' },
-          () => this.fetchData()
+          (payload) => this.applyRealtimeChange('workers', payload)
         )
-        .subscribe()
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            this.error = `Realtime sync failed: ${status}`
+          }
+        })
+    },
+
+    unsubscribeRealtime() {
+      if (!dispatchRealtimeChannel) return
+
+      void supabase.removeChannel(dispatchRealtimeChannel)
+      dispatchRealtimeChannel = null
     },
   },
 })

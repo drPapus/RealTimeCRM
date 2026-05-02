@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Job, Worker } from '../types'
+import { formatJobStatus, formatWorkerStatus, getStatusClass } from '../utils/status'
 
 const { worker, assignedJob } = defineProps<{
   worker: Worker
@@ -29,7 +30,9 @@ const handleDrop = (event: DragEvent) => {
   emit('drop', event)
 }
 
-const formatTime = (scheduledTime: string) => {
+const formatTime = (scheduledTime?: string | null) => {
+  if (!scheduledTime) return 'No time'
+
   const date = new Date(scheduledTime)
   if (Number.isNaN(date.getTime())) return scheduledTime
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -53,7 +56,9 @@ const handleJobDragStart = (event: DragEvent) => {
     @drop="handleDrop"
   >
     <strong>{{ worker.name }}</strong>
-    <p class="worker-status">Status: {{ worker.status }}</p>
+    <p :class="['status', getStatusClass(worker.status)]">
+      {{ formatWorkerStatus(worker.status) }}
+    </p>
     <div
       v-if="assignedJob"
       class="assigned-job"
@@ -62,7 +67,12 @@ const handleJobDragStart = (event: DragEvent) => {
     >
       <strong>{{ formatTime(assignedJob.scheduled_time) }} - {{ getTitle(assignedJob) }}</strong>
       <p>📍 {{ assignedJob.address || assignedJob.adress || 'No address provided' }}</p>
-      <small>Status: {{ assignedJob.status ?? 'assigned' }}</small>
+      <small
+        class="status-pill"
+        :class="getStatusClass(assignedJob.status ?? 'assigned')"
+      >
+        {{ formatJobStatus(assignedJob.status ?? 'assigned') }}
+      </small>
     </div>
     <div v-if="isDragOver" class="drop-text">Drop job here</div>
   </div>

@@ -12,4 +12,6 @@ the frontend can read `public.jobs`, but the Supabase anon role cannot update th
 
 Run [supabase-dispatch-policies.sql](./supabase-dispatch-policies.sql) in the Supabase SQL editor for the project used by `VITE_SUPABASE_URL`. The file grants read/update privileges and creates development RLS policies for `public.jobs` and `public.workers`.
 
+The same SQL file also adds `public.jobs` and `public.workers` to the `supabase_realtime` publication. That enables the dispatch board to sync job and worker changes across browser tabs and devices through Supabase Realtime.
+
 These policies are intentionally open for a demo. Replace them with authenticated, user-scoped policies before production.

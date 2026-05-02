@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDispatchStore } from '../stores/dispatchStore'
 import JobCard from './JobCard.vue'
 import WorkerCard from './WorkerCard.vue'
@@ -8,7 +8,9 @@ import type { Job } from '../types'
 const store = useDispatchStore()
 const isJobsDragOver = ref(false)
 
-const formatTime = (scheduledTime: string) => {
+const formatTime = (scheduledTime?: string | null) => {
+  if (!scheduledTime) return 'No time'
+
   const date = new Date(scheduledTime)
   if (Number.isNaN(date.getTime())) return scheduledTime
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -35,9 +37,9 @@ const handleDragStart = (event: DragEvent, jobId: string) => {
   event.dataTransfer?.setData('jobId', jobId)
 }
 
-const handleWorkerDrop = (event: DragEvent, workerId: string) => {
+const handleWorkerDrop = async (event: DragEvent, workerId: string) => {
   const jobId = event.dataTransfer?.getData('jobId')
-  if (jobId) store.assignJob(jobId, workerId)
+  if (jobId) await store.assignJob(jobId, workerId)
 }
 
 const handleJobsDragOver = (event: DragEvent) => {
@@ -61,14 +63,14 @@ onMounted(async () => {
   await store.fetchData()
   store.subscribeRealtime()
 })
+
+onUnmounted(() => {
+  store.unsubscribeRealtime()
+})
 </script>
 
 <template>
   <div>
-    <div v-if="store.error" class="error-banner">
-      {{ store.error }}
-    </div>
-
     <section class="board">
       <div
         class="column jobs-column"
@@ -86,7 +88,6 @@ onMounted(async () => {
           :formattedTime="formatTime(job.scheduled_time)"
           :title="getTitle(job)"
           :assignedName="getAssignedName(job)"
-          @dragstart="event => handleDragStart(event, job.id)"
         />
       </div>
 

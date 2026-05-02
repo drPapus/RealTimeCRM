@@ -89,6 +89,61 @@ body {
   text-align: center;
 }
 
+.status {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.status-gray {
+  color: #6b7280;
+}
+
+.status-gray::before {
+  background: #6b7280;
+}
+
+.status-yellow {
+  color: #d97706;
+}
+
+.status-yellow::before {
+  background: #f59e0b;
+}
+
+.status-blue {
+  color: #2563eb;
+}
+
+.status-blue::before {
+  background: #3b82f6;
+}
+
+.status-green {
+  color: #16a34a;
+}
+
+.status-green::before {
+  background: #22c55e;
+}
+
+.status-red {
+  color: #dc2626;
+}
+
+.status-red::before {
+  background: #ef4444;
+}
+
 .card:hover {
   background: #f9fafb;
 }

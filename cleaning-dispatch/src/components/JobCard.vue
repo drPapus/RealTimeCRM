@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Job } from '../types'
+import { formatJobStatus, getStatusClass } from '../utils/status'
 
 const { job, formattedTime, title, assignedName } = defineProps<{
   job: Job
@@ -7,21 +8,22 @@ const { job, formattedTime, title, assignedName } = defineProps<{
   title: string
   assignedName: string
 }>()
-
-const emit = defineEmits<{
-  (e: 'dragstart', event: DragEvent): void
-}>()
 </script>
 
 <template>
   <div
     class="card job-card"
     draggable="true"
-    @dragstart="emit('dragstart', $event)"
+    @dragstart="$event.dataTransfer?.setData('jobId', job.id)"
   >
     <strong>{{ formattedTime }} - {{ title }}</strong>
-    <p>📍 {{ job.address ?? job.address ?? 'No address provided' }}</p>
+    <p>📍 {{ job.address ?? job.adress ?? 'No address provided' }}</p>
     <p>👤 Assigned: {{ assignedName }}</p>
-    <small>Status: {{ job.status ?? 'scheduled' }}</small>
+    <small
+      class="status-pill"
+      :class="getStatusClass(job.status ?? 'scheduled')"
+    >
+      {{ formatJobStatus(job.status ?? 'scheduled') }}
+    </small>
   </div>
 </template>
