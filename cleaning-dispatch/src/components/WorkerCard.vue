@@ -47,13 +47,13 @@ const handleJobDragStart = (event: DragEvent) => {
 <template>
   <div
     class="card worker-card"
-    :class="{ 'drop-active': isDragOver }"
+    :class="{ 'drop-active': isDragOver, 'worker-busy': worker.status === 'busy' }"
     @dragover="handleDragOver"
     @dragleave="handleDragLeave"
     @drop="handleDrop"
   >
     <strong>{{ worker.name }}</strong>
-    <p>Status: {{ worker.status }}</p>
+    <p class="worker-status">Status: {{ worker.status }}</p>
     <div
       v-if="assignedJob"
       class="assigned-job"

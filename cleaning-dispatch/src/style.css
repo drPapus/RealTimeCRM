@@ -50,6 +50,16 @@ body {
   border-left: 5px solid #22c55e;
 }
 
+.worker-card.worker-busy {
+  border-left-color: #ef4444;
+  background: #fff7f7;
+}
+
+.worker-card.worker-busy .worker-status {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
 .worker-card.drop-active {
   background: #ecfeff;
   border-color: #38bdf8;
