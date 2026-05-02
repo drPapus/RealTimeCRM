@@ -4,6 +4,7 @@ export function formatJobStatus(status: JobStatus): string {
   const labels: Record<JobStatus, string> = {
     scheduled: 'Scheduled',
     assigned: 'Assigned',
+    on_the_way: 'On the way',
     in_progress: 'In Progress',
     done: 'Done',
     cancelled: 'Cancelled',
@@ -27,12 +28,12 @@ export function getStatusClass(status: JobStatus | WorkerStatus): string {
   const classes: Record<string, string> = {
     scheduled: 'status-gray',
     assigned: 'status-yellow',
+    on_the_way: 'status-blue',
     in_progress: 'status-blue',
     done: 'status-green',
     cancelled: 'status-red',
 
     free: 'status-green',
-    on_the_way: 'status-blue',
     busy: 'status-red',
     on_break: 'status-yellow',
   }

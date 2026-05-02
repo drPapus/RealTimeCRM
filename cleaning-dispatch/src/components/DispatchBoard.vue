@@ -28,13 +28,19 @@ const unassignedJobs = computed(() =>
   store.jobs.filter((job) => !job.worker_id && !job.assigned_worker_id)
 )
 
-const getAssignedJob = (workerId: string) =>
-  store.jobs.find(
-    (job) => job.worker_id === workerId || job.assigned_worker_id === workerId
-  )
+const isActiveJob = (job: Job) => job.status !== 'done' && job.status !== 'cancelled'
 
-const handleDragStart = (event: DragEvent, jobId: string) => {
-  event.dataTransfer?.setData('jobId', jobId)
+const getAssignedJob = (workerId: string) => {
+  const worker = store.workers.find((worker) => worker.id === workerId)
+  const currentJob = worker?.current_job_id
+    ? store.jobs.find((job) => job.id === worker.current_job_id && isActiveJob(job))
+    : null
+
+  return currentJob ?? store.jobs.find(
+    (job) =>
+      isActiveJob(job) &&
+      (job.worker_id === workerId || job.assigned_worker_id === workerId)
+  )
 }
 
 const handleWorkerDrop = async (event: DragEvent, workerId: string) => {
@@ -99,7 +105,6 @@ onUnmounted(() => {
           :worker="worker"
           :assignedJob="getAssignedJob(worker.id)"
           @drop="event => handleWorkerDrop(event, worker.id)"
-          @jobDragStart="handleDragStart"
         />
       </div>
     </section>

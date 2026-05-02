@@ -67,16 +67,44 @@ body {
 }
 
 .assigned-job {
-  background: #eef7ff;
-  border: 1px solid #38bdf8;
-  border-radius: 8px;
-  cursor: grab;
   margin-top: 12px;
-  padding: 12px;
 }
 
 .assigned-job p {
   margin: 8px 0;
+}
+
+.assigned-job .job-card {
+  margin-bottom: 0;
+}
+
+.job-time,
+.current-job-label {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.quick-actions button {
+  background: #111827;
+  border: 0;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+.quick-actions button:hover {
+  background: #374151;
 }
 
 .drop-text {

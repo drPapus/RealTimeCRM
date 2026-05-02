@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Job, Worker } from '../types'
-import { formatJobStatus, formatWorkerStatus, getStatusClass } from '../utils/status'
+import JobCard from './JobCard.vue'
+import { formatWorkerStatus, getStatusClass } from '../utils/status'
 
 const { worker, assignedJob } = defineProps<{
   worker: Worker
@@ -10,7 +11,6 @@ const { worker, assignedJob } = defineProps<{
 
 const emit = defineEmits<{
   (e: 'drop', event: DragEvent): void
-  (e: 'jobDragStart', event: DragEvent, jobId: string): void
 }>()
 
 const isDragOver = ref(false)
@@ -39,12 +39,6 @@ const formatTime = (scheduledTime?: string | null) => {
 }
 
 const getTitle = (job: Job) => job.title || job.address || job.adress || 'Untitled job'
-
-const handleJobDragStart = (event: DragEvent) => {
-  if (assignedJob) {
-    emit('jobDragStart', event, assignedJob.id)
-  }
-}
 </script>
 
 <template>
@@ -62,18 +56,17 @@ const handleJobDragStart = (event: DragEvent) => {
     <div
       v-if="assignedJob"
       class="assigned-job"
-      draggable="true"
-      @dragstart="handleJobDragStart"
     >
-      <strong>{{ formatTime(assignedJob.scheduled_time) }} - {{ getTitle(assignedJob) }}</strong>
-      <p>📍 {{ assignedJob.address || assignedJob.adress || 'No address provided' }}</p>
-      <small
-        class="status-pill"
-        :class="getStatusClass(assignedJob.status ?? 'assigned')"
-      >
-        {{ formatJobStatus(assignedJob.status ?? 'assigned') }}
-      </small>
+      <p class="current-job-label">Current job</p>
+      <JobCard
+        :job="assignedJob"
+        :formattedTime="formatTime(assignedJob.scheduled_time)"
+        :title="getTitle(assignedJob)"
+        :assignedName="worker.name ?? '-'"
+        showActions
+      />
     </div>
+    <p v-else class="current-job-label">No current job</p>
     <div v-if="isDragOver" class="drop-text">Drop job here</div>
   </div>
 </template>

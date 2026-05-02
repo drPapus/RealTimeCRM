@@ -1,6 +1,12 @@
 export type WorkerStatus = 'free' | 'on_the_way' | 'busy' | 'on_break'
 
-export type JobStatus = 'scheduled' | 'assigned' | 'in_progress' | 'done' | 'cancelled'
+export type JobStatus =
+  | 'scheduled'
+  | 'assigned'
+  | 'on_the_way'
+  | 'in_progress'
+  | 'done'
+  | 'cancelled'
 
 export interface Worker {
   id: string

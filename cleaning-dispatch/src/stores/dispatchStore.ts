@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import type { Job, Worker } from '../types'
+import type { Job, Worker, WorkerStatus } from '../types'
 
 type DispatchTable = 'jobs' | 'workers'
 type DispatchRealtimeRow = Record<string, unknown>
@@ -27,6 +27,14 @@ const upsertById = <T extends { id: string }>(rows: T[], row: T) => {
 
 const removeById = <T extends { id: string }>(rows: T[], id: string) =>
   rows.filter((row) => row.id !== id)
+
+const isMissingCurrentJobIdError = (message: string) =>
+  message.includes("'current_job_id' column") ||
+  message.includes('"current_job_id" column')
+
+const isMissingAssignedWorkerIdError = (message: string) =>
+  message.includes("'assigned_worker_id' column") ||
+  message.includes('"assigned_worker_id" column')
 
 export const useDispatchStore = defineStore('dispatch', {
   state: () => ({
@@ -86,7 +94,61 @@ export const useDispatchStore = defineStore('dispatch', {
       }
     },
 
+    async updateWorkerStatus(
+      workerId: string,
+      status: WorkerStatus,
+      currentJobId: string | null
+    ) {
+      const workerUpdate = await supabase
+        .from('workers')
+        .update({
+          status,
+          current_job_id: currentJobId ?? null,
+        })
+        .eq('id', workerId)
+
+      if (
+        workerUpdate.error &&
+        isMissingCurrentJobIdError(workerUpdate.error.message)
+      ) {
+        return supabase
+          .from('workers')
+          .update({ status })
+          .eq('id', workerId)
+      }
+
+      return workerUpdate
+    },
+
+    async updateJobAssignment(
+      jobId: string,
+      workerId: string | null,
+      status: Job['status']
+    ) {
+      const jobUpdate = await supabase
+        .from('jobs')
+        .update({
+          assigned_worker_id: workerId,
+          status,
+        })
+        .eq('id', jobId)
+
+      if (jobUpdate.error && isMissingAssignedWorkerIdError(jobUpdate.error.message)) {
+        return supabase
+          .from('jobs')
+          .update({
+            worker_id: workerId,
+            status,
+          })
+          .eq('id', jobId)
+      }
+
+      return jobUpdate
+    },
+
     async assignJob(jobId: string, workerId: string) {
+      if (!jobId || !workerId) return
+
       const job = this.jobs.find((j) => j.id === jobId)
       const worker = this.workers.find((w) => w.id === workerId)
 
@@ -96,20 +158,12 @@ export const useDispatchStore = defineStore('dispatch', {
       const previousWorker = { ...worker }
 
       job.worker_id = workerId
+      job.assigned_worker_id = workerId
       job.status = 'assigned'
-      worker.status = 'busy'
+      worker.status = 'on_the_way'
+      worker.current_job_id = jobId
 
-      const jobUpdate = await supabase
-        .from('jobs')
-        .update({
-          worker_id: workerId,
-          status: 'assigned',
-        })
-        .eq('id', jobId)
-        .select()
-
-        console.log('jobUpdate:', jobUpdate)
-        console.log('assignJob params:', { jobId, workerId })
+      const jobUpdate = await this.updateJobAssignment(jobId, workerId, 'assigned')
 
       if (jobUpdate.error) {
         console.error('Job update failed:', jobUpdate.error)
@@ -119,12 +173,7 @@ export const useDispatchStore = defineStore('dispatch', {
         return
       }
 
-      const workerUpdate = await supabase
-        .from('workers')
-        .update({
-          status: 'busy',
-        })
-        .eq('id', workerId)
+      const workerUpdate = await this.updateWorkerStatus(workerId, 'on_the_way', jobId)
 
       if (workerUpdate.error) {
         console.error('Worker update failed:', workerUpdate.error)
@@ -134,6 +183,108 @@ export const useDispatchStore = defineStore('dispatch', {
         return
       }
       this.error = ''
+    },
+
+    async markOnTheWay(jobId: string, workerId: string) {
+      const { error: jobError } = await supabase
+        .from('jobs')
+        .update({ status: 'on_the_way' })
+        .eq('id', jobId)
+
+      if (jobError) {
+        console.error('Job update failed:', jobError)
+        this.error = `Job update failed: ${jobError.message}`
+        return
+      }
+
+      const { error: workerError } = await this.updateWorkerStatus(
+        workerId,
+        'on_the_way',
+        jobId
+      )
+
+      if (workerError) {
+        console.error('Worker update failed:', workerError)
+        this.error = `Worker update failed: ${workerError.message}`
+        return
+      }
+
+      await supabase.from('events').insert({
+        type: 'worker_on_the_way',
+        job_id: jobId,
+        worker_id: workerId,
+      })
+
+      this.error = ''
+      await this.fetchData()
+    },
+
+    async startJob(jobId: string, workerId: string) {
+      const { error: jobError } = await supabase
+        .from('jobs')
+        .update({ status: 'in_progress' })
+        .eq('id', jobId)
+
+      if (jobError) {
+        console.error('Job update failed:', jobError)
+        this.error = `Job update failed: ${jobError.message}`
+        return
+      }
+
+      const { error: workerError } = await this.updateWorkerStatus(
+        workerId,
+        'busy',
+        jobId
+      )
+
+      if (workerError) {
+        console.error('Worker update failed:', workerError)
+        this.error = `Worker update failed: ${workerError.message}`
+        return
+      }
+
+      await supabase.from('events').insert({
+        type: 'job_started',
+        job_id: jobId,
+        worker_id: workerId,
+      })
+
+      this.error = ''
+      await this.fetchData()
+    },
+
+    async markDone(jobId: string, workerId: string) {
+      const { error: jobError } = await supabase
+        .from('jobs')
+        .update({ status: 'done' })
+        .eq('id', jobId)
+
+      if (jobError) {
+        console.error('Job update failed:', jobError)
+        this.error = `Job update failed: ${jobError.message}`
+        return
+      }
+
+      const { error: workerError } = await this.updateWorkerStatus(
+        workerId,
+        'free',
+        null
+      )
+
+      if (workerError) {
+        console.error('Worker update failed:', workerError)
+        this.error = `Worker update failed: ${workerError.message}`
+        return
+      }
+
+      await supabase.from('events').insert({
+        type: 'job_completed',
+        job_id: jobId,
+        worker_id: workerId,
+      })
+
+      this.error = ''
+      await this.fetchData()
     },
 
     async unassignJob(jobId: string) {
@@ -150,6 +301,9 @@ export const useDispatchStore = defineStore('dispatch', {
       job.worker_id = null
       job.assigned_worker_id = null
       job.status = 'scheduled'
+      if (worker?.current_job_id === jobId) {
+        worker.current_job_id = null
+      }
 
       const hasOtherAssignedJobs = this.jobs.some(
         (otherJob) =>
@@ -161,16 +315,7 @@ export const useDispatchStore = defineStore('dispatch', {
         worker.status = 'free'
       }
 
-      const jobUpdate = await supabase
-        .from('jobs')
-        .update({
-          worker_id: null,
-          status: 'scheduled',
-        })
-        .eq('id', jobId)
-        .select()
-        
-        console.log('jobUpdate:', jobUpdate)
+      const jobUpdate = await this.updateJobAssignment(jobId, null, 'scheduled')
 
       if (jobUpdate.error) {
         console.error('Job unassign failed:', jobUpdate.error)
@@ -181,12 +326,7 @@ export const useDispatchStore = defineStore('dispatch', {
       }
 
       if (worker && !hasOtherAssignedJobs) {
-        const workerUpdate = await supabase
-          .from('workers')
-          .update({
-            status: 'free',
-          })
-          .eq('id', worker.id)
+        const workerUpdate = await this.updateWorkerStatus(worker.id, 'free', null)
 
         if (workerUpdate.error) {
           console.error('Worker reset failed:', workerUpdate.error)
